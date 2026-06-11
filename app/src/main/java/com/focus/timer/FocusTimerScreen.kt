@@ -8,6 +8,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
 
 @Composable
 fun FocusTimerScreen(viewModel: TimerViewModel) {
@@ -38,5 +42,16 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = { viewModel.setFocusTime(60) }) { Text("60m") }
         }
+        Spacer(modifier = Modifier.weight(1f))
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { context ->
+                AdView(context).apply {
+                    setAdSize(AdSize.BANNER)
+                    adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test Banner
+                    loadAd(AdRequest.Builder().build())
+                }
+            }
+        )
     }
 }
