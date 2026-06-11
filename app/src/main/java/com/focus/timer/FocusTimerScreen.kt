@@ -30,5 +30,13 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
             Spacer(modifier = Modifier.width(16.dp))
             Button(onClick = { viewModel.stopTimer() }) { Text("Stop") }
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        Row {
+            Button(onClick = { viewModel.setFocusTime(5) }) { Text("5m") }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = { viewModel.setFocusTime(25) }) { Text("25m") }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = { viewModel.setFocusTime(60) }) { Text("60m") }
+        }
     }
 }
