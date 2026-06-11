@@ -7,15 +7,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MobileAds.initialize(this) {}
-        val timerViewModel = TimerViewModel()
         setContent {
             MaterialTheme {
+                val timerViewModel: TimerViewModel = viewModel()
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     FocusTimerScreen(timerViewModel)
                 }

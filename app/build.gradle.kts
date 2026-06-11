@@ -64,4 +64,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("com.google.android.gms:play-services-ads:23.0.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 }

@@ -1,6 +1,13 @@
 package com.focus.timer
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import android.media.RingtoneManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -8,26 +15,50 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-class TimerViewModel : ViewModel() {
-    private val _remainingSeconds = MutableStateFlow(1500) // Default to 25 minutes (1500 seconds)
+class TimerViewModel(application: Application) : AndroidViewModel(application) {
+    private val _remainingSeconds = MutableStateFlow(1500)
     val remainingSeconds: StateFlow<Int> = _remainingSeconds
 
     private var timerJob: Job? = null
-    private val defaultFocusTime = 25 * 60 // 25 minutes in seconds
+    private val defaultFocusTime = 25 * 60
 
     init {
         resetTimer()
     }
 
+    private fun triggerAlarm() {
+        // Play notification sound
+        val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val r = RingtoneManager.getRingtone(getApplication<Application>().applicationContext, notification)
+        r.play()
+
+        // Vibrate
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getApplication<Application>().getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(1000, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(1000)
+        }
+    }
+
     fun startTimer() {
-        if (timerJob?.isActive == true) return // Prevent multiple timers
+        if (timerJob?.isActive == true) return
 
         timerJob = viewModelScope.launch {
             while (_remainingSeconds.value > 0) {
-                delay(1000) // Wait for 1 second
+                delay(1000)
                 _remainingSeconds.value -= 1
             }
-            stopTimer() // Timer finished
+            triggerAlarm()
+            stopTimer()
         }
     }
 
@@ -45,7 +76,7 @@ class TimerViewModel : ViewModel() {
         val newSeconds = minutes * 60
         if (newSeconds > 0) {
             _remainingSeconds.value = newSeconds
-            stopTimer() // Stop any active timer and reset
+            stopTimer()
         }
     }
 }
