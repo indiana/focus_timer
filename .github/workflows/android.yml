@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
     - name: Set up JDK 17
@@ -33,7 +35,17 @@ jobs:
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
         ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
-      run: ./gradlew bundleRelease
+      run: ./gradlew bundleRelease --stacktrace > gradle_build.log 2>&1 || { tail -n 100 gradle_build.log; exit 1; }
+
+    - name: Push logs on failure
+      if: failure()
+      run: |
+        git config --global user.name "Github Actions"
+        git config --global user.email "actions@github.com"
+        git checkout -b debug-logs
+        git add gradle_build.log
+        git commit -m "ci: save build failure logs [skip ci]"
+        git push origin debug-logs --force
 
     - name: Upload Release Bundle
       uses: actions/upload-artifact@v4
