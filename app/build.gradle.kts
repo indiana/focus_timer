@@ -23,6 +23,28 @@ android {
     val envAdmobAppId = System.getenv("ADMOB_APP_ID")?.takeIf { it.trim().isNotEmpty() } ?: "ca-app-pub-3940256099942544~3347511713"
     val envAdmobBannerId = System.getenv("ADMOB_BANNER_UNIT_ID")?.takeIf { it.trim().isNotEmpty() } ?: "ca-app-pub-3940256099942544/6300978111"
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("release.jks")
+            val storePwd = System.getenv("KEYSTORE_PASSWORD")
+            val keyPwd = System.getenv("KEY_PASSWORD")
+            val alias = System.getenv("KEY_ALIAS")
+
+            if (keystoreFile.exists() && !storePwd.isNullOrBlank() && !keyPwd.isNullOrBlank() && !alias.isNullOrBlank()) {
+                storeFile = keystoreFile
+                storePassword = storePwd
+                keyAlias = alias
+                keyPassword = keyPwd
+            } else {
+                val debugConfig = getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -32,6 +54,7 @@ android {
             )
             manifestPlaceholders["admobAppId"] = envAdmobAppId
             buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"$envAdmobBannerId\"")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713" // AdMob Test App ID
