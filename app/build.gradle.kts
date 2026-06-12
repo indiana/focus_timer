@@ -20,6 +20,9 @@ android {
         }
     }
 
+    val envAdmobAppId = System.getenv("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+    val envAdmobBannerId = System.getenv("ADMOB_BANNER_UNIT_ID") ?: "ca-app-pub-3940256099942544/6300978111"
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -27,8 +30,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713" // Replace with real production AdMob App ID
-            buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"ca-app-pub-3940256099942544/6300978111\"") // Replace with real production Banner Unit ID
+            manifestPlaceholders["admobAppId"] = envAdmobAppId
+            buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"$envAdmobBannerId\"")
         }
         debug {
             manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713" // AdMob Test App ID
