@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -55,32 +56,57 @@ private val PremiumDarkColorScheme = darkColorScheme(
 
 @Composable
 fun FocusTimerScreen(viewModel: TimerViewModel) {
+    val remainingSeconds = viewModel.remainingSeconds.collectAsState().value
+    val totalSeconds = viewModel.totalSeconds.collectAsState().value
+    val isRunning = viewModel.isRunning.collectAsState().value
+    val intention = viewModel.intention.collectAsState().value
+
+    // Keep Screen On logic
+    val view = LocalView.current
+    DisposableEffect(isRunning) {
+        val activity = view.context.findActivity()
+        if (isRunning) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    FocusTimerContent(
+        remainingSeconds = remainingSeconds,
+        totalSeconds = totalSeconds,
+        isRunning = isRunning,
+        intention = intention,
+        onStartClick = { viewModel.startTimer() },
+        onStopClick = { viewModel.stopTimer() },
+        onResetClick = { viewModel.resetTimer() },
+        onPresetClick = { minutes -> viewModel.setFocusTime(minutes) },
+        onIntentionChange = { text -> viewModel.setIntention(text) }
+    )
+}
+
+@Composable
+fun FocusTimerContent(
+    remainingSeconds: Int,
+    totalSeconds: Int,
+    isRunning: Boolean,
+    intention: String,
+    onStartClick: () -> Unit,
+    onStopClick: () -> Unit,
+    onResetClick: () -> Unit,
+    onPresetClick: (Int) -> Unit,
+    onIntentionChange: (String) -> Unit
+) {
     MaterialTheme(colorScheme = PremiumDarkColorScheme) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            val remainingSeconds = viewModel.remainingSeconds.collectAsState().value
-            val totalSeconds = viewModel.totalSeconds.collectAsState().value
-            val isRunning = viewModel.isRunning.collectAsState().value
-            val intention = viewModel.intention.collectAsState().value
-
             val minutes = remainingSeconds / 60
             val seconds = remainingSeconds % 60
-
-            // Keep Screen On logic
-            val view = LocalView.current
-            DisposableEffect(isRunning) {
-                val activity = view.context.findActivity()
-                if (isRunning) {
-                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                } else {
-                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                }
-                onDispose {
-                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                }
-            }
 
             // Calculate animated progress fraction
             val progressFraction = if (totalSeconds > 0) {
@@ -155,7 +181,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                     } else {
                         OutlinedTextField(
                             value = intention,
-                            onValueChange = { viewModel.setIntention(it) },
+                            onValueChange = onIntentionChange,
                             label = { Text("What is your focus target?") },
                             placeholder = { Text("e.g. Coding, Reading, Writing") },
                             singleLine = true,
@@ -235,7 +261,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                     ) {
                         if (!isRunning) {
                             Button(
-                                onClick = { viewModel.startTimer() },
+                                onClick = onStartClick,
                                 shape = RoundedCornerShape(24.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
@@ -247,7 +273,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                             }
                         } else {
                             Button(
-                                onClick = { viewModel.stopTimer() },
+                                onClick = onStopClick,
                                 shape = RoundedCornerShape(24.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                             ) {
@@ -262,7 +288,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                         Spacer(modifier = Modifier.width(16.dp))
 
                         OutlinedButton(
-                            onClick = { viewModel.resetTimer() },
+                            onClick = onResetClick,
                             shape = RoundedCornerShape(24.dp)
                         ) {
                             Text(
@@ -284,7 +310,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                             val isSelected = (totalSeconds == mins * 60)
                             if (isSelected) {
                                 Button(
-                                    onClick = { viewModel.setFocusTime(mins) },
+                                    onClick = { onPresetClick(mins) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -295,7 +321,7 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
                                 }
                             } else {
                                 OutlinedButton(
-                                    onClick = { viewModel.setFocusTime(mins) },
+                                    onClick = { onPresetClick(mins) },
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text("${mins}m", color = MaterialTheme.colorScheme.onBackground)
@@ -319,4 +345,20 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
             }
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun FocusTimerContentPreview() {
+    FocusTimerContent(
+        remainingSeconds = 1500,
+        totalSeconds = 1500,
+        isRunning = false,
+        intention = "Reviewing Code",
+        onStartClick = {},
+        onStopClick = {},
+        onResetClick = {},
+        onPresetClick = {},
+        onIntentionChange = {}
+    )
 }

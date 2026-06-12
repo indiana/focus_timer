@@ -2,8 +2,10 @@ package com.focus.timer
 
 import android.app.Application
 import android.content.Context
+import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -31,15 +33,22 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private var timerJob: Job? = null
     private val defaultFocusTime = 25 * 60
 
+    private var activeRingtone: Ringtone? = null
+    private var endTimeRealtime: Long = 0L
+
     init {
         resetTimer()
     }
 
     private fun triggerAlarm() {
+        // Stop any active ringtone first
+        activeRingtone?.stop()
+
         // Play notification sound
         val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val r = RingtoneManager.getRingtone(getApplication<Application>().applicationContext, notification)
-        r.play()
+        activeRingtone = r
+        r?.play()
 
         // Vibrate
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -60,14 +69,22 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startTimer() {
         if (timerJob?.isActive == true) return
+        
+        // Stop any playing alarm when starting
+        activeRingtone?.stop()
+        activeRingtone = null
+
         _isRunning.value = true
+        endTimeRealtime = SystemClock.elapsedRealtime() + _remainingSeconds.value * 1000L
 
         timerJob = viewModelScope.launch {
             try {
-                while (_remainingSeconds.value > 0) {
-                    delay(1000)
-                    _remainingSeconds.value -= 1
+                while (SystemClock.elapsedRealtime() < endTimeRealtime) {
+                    val remaining = ((endTimeRealtime - SystemClock.elapsedRealtime()) / 1000L).toInt()
+                    _remainingSeconds.value = remaining.coerceAtLeast(0)
+                    delay(200) // Poll frequently to ensure zero cumulative drift
                 }
+                _remainingSeconds.value = 0
                 triggerAlarm()
             } finally {
                 _isRunning.value = false
@@ -80,6 +97,8 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         timerJob = null
         _isRunning.value = false
+        activeRingtone?.stop()
+        activeRingtone = null
     }
 
     fun resetTimer() {
