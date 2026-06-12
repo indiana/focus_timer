@@ -19,6 +19,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val _remainingSeconds = MutableStateFlow(1500)
     val remainingSeconds: StateFlow<Int> = _remainingSeconds
 
+    private val _totalSeconds = MutableStateFlow(1500)
+    val totalSeconds: StateFlow<Int> = _totalSeconds
+
+    private val _isRunning = MutableStateFlow(false)
+    val isRunning: StateFlow<Boolean> = _isRunning
+
+    private val _intention = MutableStateFlow("")
+    val intention: StateFlow<String> = _intention
+
     private var timerJob: Job? = null
     private val defaultFocusTime = 25 * 60
 
@@ -51,32 +60,44 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startTimer() {
         if (timerJob?.isActive == true) return
+        _isRunning.value = true
 
         timerJob = viewModelScope.launch {
-            while (_remainingSeconds.value > 0) {
-                delay(1000)
-                _remainingSeconds.value -= 1
+            try {
+                while (_remainingSeconds.value > 0) {
+                    delay(1000)
+                    _remainingSeconds.value -= 1
+                }
+                triggerAlarm()
+            } finally {
+                _isRunning.value = false
+                timerJob = null
             }
-            triggerAlarm()
-            stopTimer()
         }
     }
 
     fun stopTimer() {
         timerJob?.cancel()
         timerJob = null
+        _isRunning.value = false
     }
 
     fun resetTimer() {
         stopTimer()
         _remainingSeconds.value = defaultFocusTime
+        _totalSeconds.value = defaultFocusTime
     }
 
     fun setFocusTime(minutes: Int) {
         val newSeconds = minutes * 60
         if (newSeconds > 0) {
+            _totalSeconds.value = newSeconds
             _remainingSeconds.value = newSeconds
             stopTimer()
         }
+    }
+
+    fun setIntention(newIntention: String) {
+        _intention.value = newIntention
     }
 }
