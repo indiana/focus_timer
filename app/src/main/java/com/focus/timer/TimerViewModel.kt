@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-class TimerViewModel(
+class TimerViewModel @JvmOverloads constructor(
     application: Application,
     private val alarmController: FocusAlarmController = DefaultFocusAlarmController(application)
 ) : AndroidViewModel(application) {
