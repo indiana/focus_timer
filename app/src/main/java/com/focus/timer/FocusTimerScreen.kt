@@ -337,7 +337,7 @@ fun FocusTimerContent(
                     factory = { context ->
                         AdView(context).apply {
                             setAdSize(AdSize.BANNER)
-                            adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test Banner
+                            adUnitId = BuildConfig.ADMOB_BANNER_UNIT_ID
                             loadAd(AdRequest.Builder().build())
                         }
                     }
