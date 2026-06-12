@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.focus.timer"
+    namespace = "com.indiana.focustimer"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.focus.timer"
+        applicationId = "com.indiana.focustimer"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

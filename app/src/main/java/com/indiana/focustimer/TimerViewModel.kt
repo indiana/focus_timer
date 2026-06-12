@@ -1,4 +1,4 @@
-package com.focus.timer
+package com.indiana.focustimer
 
 import android.app.Application
 import android.os.SystemClock

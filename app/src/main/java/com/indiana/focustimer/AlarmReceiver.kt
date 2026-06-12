@@ -1,4 +1,4 @@
-package com.focus.timer
+package com.indiana.focustimer
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

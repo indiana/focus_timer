@@ -1,4 +1,4 @@
-package com.focus.timer
+package com.indiana.focustimer
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
