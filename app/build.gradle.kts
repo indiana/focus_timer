@@ -20,8 +20,8 @@ android {
         }
     }
 
-    val envAdmobAppId = System.getenv("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
-    val envAdmobBannerId = System.getenv("ADMOB_BANNER_UNIT_ID") ?: "ca-app-pub-3940256099942544/6300978111"
+    val envAdmobAppId = System.getenv("ADMOB_APP_ID")?.takeIf { it.trim().isNotEmpty() } ?: "ca-app-pub-3940256099942544~3347511713"
+    val envAdmobBannerId = System.getenv("ADMOB_BANNER_UNIT_ID")?.takeIf { it.trim().isNotEmpty() } ?: "ca-app-pub-3940256099942544/6300978111"
 
     buildTypes {
         release {
