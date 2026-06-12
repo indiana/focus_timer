@@ -1,7 +1,10 @@
 package com.focus.timer
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
@@ -16,6 +19,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+private const val ALARM_REQUEST_CODE = 1001
 
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val _remainingSeconds = MutableStateFlow(1500)
@@ -67,6 +72,63 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun scheduleBackgroundAlarm(secondsInFuture: Int) {
+        val context = getApplication<Application>().applicationContext
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("task_name", _intention.value.ifBlank { "Focus session" })
+        }
+        
+        val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or 
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE,
+            intent,
+            pendingIntentFlags
+        )
+
+        val triggerAtMillis = SystemClock.elapsedRealtime() + secondsInFuture * 1000L
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        } else {
+            alarmManager.setExact(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
+    }
+
+    private fun cancelBackgroundAlarm() {
+        val context = getApplication<Application>().applicationContext
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        
+        val intent = Intent(context, AlarmReceiver::class.java)
+        
+        val pendingIntentFlags = PendingIntent.FLAG_NO_CREATE or 
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE,
+            intent,
+            pendingIntentFlags
+        )
+        
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
     fun startTimer() {
         if (timerJob?.isActive == true) return
         
@@ -75,13 +137,17 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         activeRingtone = null
 
         _isRunning.value = true
-        endTimeRealtime = SystemClock.elapsedRealtime() + _remainingSeconds.value * 1000L
+        val remaining = _remainingSeconds.value
+        endTimeRealtime = SystemClock.elapsedRealtime() + remaining * 1000L
+
+        // Schedule exact background alarm
+        scheduleBackgroundAlarm(remaining)
 
         timerJob = viewModelScope.launch {
             try {
                 while (SystemClock.elapsedRealtime() < endTimeRealtime) {
-                    val remaining = ((endTimeRealtime - SystemClock.elapsedRealtime()) / 1000L).toInt()
-                    _remainingSeconds.value = remaining.coerceAtLeast(0)
+                    val rem = ((endTimeRealtime - SystemClock.elapsedRealtime()) / 1000L).toInt()
+                    _remainingSeconds.value = rem.coerceAtLeast(0)
                     delay(200) // Poll frequently to ensure zero cumulative drift
                 }
                 _remainingSeconds.value = 0
@@ -99,6 +165,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _isRunning.value = false
         activeRingtone?.stop()
         activeRingtone = null
+        cancelBackgroundAlarm()
     }
 
     fun resetTimer() {
