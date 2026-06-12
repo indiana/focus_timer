@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -130,7 +131,7 @@ fun FocusTimerContent(
             ) {
                 // 1. App Title Header
                 Text(
-                    text = "FOCUS FLOW",
+                    text = stringResource(R.string.focus_flow_title),
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp,
@@ -161,7 +162,7 @@ fun FocusTimerContent(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "CURRENT TASK",
+                                    text = stringResource(R.string.current_task_header),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         letterSpacing = 1.sp,
                                         color = MaterialTheme.colorScheme.secondary
@@ -169,7 +170,7 @@ fun FocusTimerContent(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = intention.ifBlank { "Staying focused" },
+                                    text = intention.ifBlank { stringResource(R.string.staying_focused_fallback) },
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -182,8 +183,8 @@ fun FocusTimerContent(
                         OutlinedTextField(
                             value = intention,
                             onValueChange = onIntentionChange,
-                            label = { Text("What is your focus target?") },
-                            placeholder = { Text("e.g. Coding, Reading, Writing") },
+                            label = { Text(stringResource(R.string.focus_target_label)) },
+                            placeholder = { Text(stringResource(R.string.focus_target_placeholder)) },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -239,7 +240,7 @@ fun FocusTimerContent(
                         if (isRunning) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "FOCUSING",
+                                text = stringResource(R.string.focusing_indicator),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.primary,
                                     letterSpacing = 1.5.sp,
@@ -266,7 +267,7 @@ fun FocusTimerContent(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
-                                    text = "Start Focus",
+                                    text = stringResource(R.string.start_focus_btn),
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Bold
                                 )
@@ -278,7 +279,7 @@ fun FocusTimerContent(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                             ) {
                                 Text(
-                                    text = "Pause",
+                                    text = stringResource(R.string.pause_btn),
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Bold
                                 )
@@ -292,7 +293,7 @@ fun FocusTimerContent(
                             shape = RoundedCornerShape(24.dp)
                         ) {
                             Text(
-                                text = "Reset",
+                                text = stringResource(R.string.reset_btn),
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                 color = MaterialTheme.colorScheme.onBackground
                             )

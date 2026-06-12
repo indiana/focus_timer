@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus Timer</string>
+    <string name="focus_flow_title">FOCUS FLOW</string>
+    <string name="current_task_header">CURRENT TASK</string>
+    <string name="staying_focused_fallback">Staying focused</string>
+    <string name="focus_target_label">What is your focus target?</string>
+    <string name="focus_target_placeholder">e.g. Coding, Reading, Writing</string>
+    <string name="focusing_indicator">FOCUSING</string>
+    <string name="start_focus_btn">Start Focus</string>
+    <string name="pause_btn">Pause</string>
+    <string name="reset_btn">Reset</string>
+</resources>
