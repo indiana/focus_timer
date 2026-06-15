@@ -5,13 +5,12 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,6 +18,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -55,12 +55,20 @@ private val PremiumDarkColorScheme = darkColorScheme(
     surfaceVariant = Color(0xFF1E293B) // Circle background track
 )
 
+private fun formatPresetCaption(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return if (s == 0) "${m}m" else "${m}m ${s}s"
+}
+
 @Composable
 fun FocusTimerScreen(viewModel: TimerViewModel) {
     val remainingSeconds = viewModel.remainingSeconds.collectAsState().value
     val totalSeconds = viewModel.totalSeconds.collectAsState().value
     val isRunning = viewModel.isRunning.collectAsState().value
     val intention = viewModel.intention.collectAsState().value
+    val presets = viewModel.presets.collectAsState().value
+    val selectedPresetIndex = viewModel.selectedPresetIndex.collectAsState().value
 
     // Keep Screen On logic
     val view = LocalView.current
@@ -81,10 +89,14 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
         totalSeconds = totalSeconds,
         isRunning = isRunning,
         intention = intention,
+        presets = presets,
+        selectedPresetIndex = selectedPresetIndex,
         onStartClick = { viewModel.startTimer() },
         onStopClick = { viewModel.stopTimer() },
         onResetClick = { viewModel.resetTimer() },
-        onPresetClick = { minutes -> viewModel.setFocusTime(minutes) },
+        onPresetSelect = { index -> viewModel.selectPreset(index) },
+        onAdjustTime = { mins, secs -> viewModel.setCustomTime(mins, secs) },
+        onSavePresetClick = { viewModel.saveCurrentAsPreset() },
         onIntentionChange = { text -> viewModel.setIntention(text) }
     )
 }
@@ -95,13 +107,104 @@ fun FocusTimerContent(
     totalSeconds: Int,
     isRunning: Boolean,
     intention: String,
+    presets: List<Int>,
+    selectedPresetIndex: Int,
     onStartClick: () -> Unit,
     onStopClick: () -> Unit,
     onResetClick: () -> Unit,
-    onPresetClick: (Int) -> Unit,
+    onPresetSelect: (Int) -> Unit,
+    onAdjustTime: (Int, Int) -> Unit,
+    onSavePresetClick: () -> Unit,
     onIntentionChange: (String) -> Unit
 ) {
+    var showAdjustDialog by remember { mutableStateOf(false) }
+
     MaterialTheme(colorScheme = PremiumDarkColorScheme) {
+        if (showAdjustDialog) {
+            var minutesInput by remember { mutableStateOf((totalSeconds / 60).toString()) }
+            var secondsInput by remember { mutableStateOf((totalSeconds % 60).toString()) }
+            var isError by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { showAdjustDialog = false },
+                title = { Text("Adjust Focus Time") },
+                text = {
+                    Column {
+                        Text(
+                            text = "Set a custom duration for this focus session:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = minutesInput,
+                                onValueChange = { newValue ->
+                                    if (newValue.all { it.isDigit() }) {
+                                        minutesInput = newValue
+                                    }
+                                },
+                                label = { Text("Minutes") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = secondsInput,
+                                onValueChange = { newValue ->
+                                    if (newValue.all { it.isDigit() }) {
+                                        secondsInput = newValue
+                                    }
+                                },
+                                label = { Text("Seconds") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (isError) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Please enter valid numbers (Seconds: 0-59, Minutes: 0-180)",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val mins = minutesInput.toIntOrNull() ?: 0
+                            val secs = secondsInput.toIntOrNull() ?: 0
+                            if (secs in 0..59 && mins in 0..180 && (mins > 0 || secs > 0)) {
+                                onAdjustTime(mins, secs)
+                                showAdjustDialog = false
+                            } else {
+                                isError = true
+                            }
+                        }
+                    ) {
+                        Text("Apply", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAdjustDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -224,10 +327,15 @@ fun FocusTimerContent(
                         strokeCap = StrokeCap.Round
                     )
 
-                    // Text & Info inside
+                    // Text & Info inside (Clickable to adjust time when idle)
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(enabled = !isRunning) {
+                                showAdjustDialog = true
+                            }
                     ) {
                         Text(
                             text = "%02d:%02d".format(minutes, seconds),
@@ -245,6 +353,16 @@ fun FocusTimerContent(
                                     color = MaterialTheme.colorScheme.primary,
                                     letterSpacing = 1.5.sp,
                                     fontWeight = FontWeight.Bold
+                                )
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "TAP TO ADJUST",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                    letterSpacing = 1.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             )
                         }
@@ -302,31 +420,52 @@ fun FocusTimerContent(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // 5. Presets Row
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    // 5. Presets Row & Save Option
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        val presets = listOf(5, 25, 60)
-                        presets.forEach { mins ->
-                            val isSelected = (totalSeconds == mins * 60)
-                            if (isSelected) {
-                                Button(
-                                    onClick = { onPresetClick(mins) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("${mins}m", fontWeight = FontWeight.Bold)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            presets.forEachIndexed { index, duration ->
+                                val isSelected = (index == selectedPresetIndex)
+                                val caption = formatPresetCaption(duration)
+                                if (isSelected) {
+                                    Button(
+                                        onClick = { onPresetSelect(index) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(caption, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { onPresetSelect(index) },
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(caption, color = MaterialTheme.colorScheme.onBackground)
+                                    }
                                 }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { onPresetClick(mins) },
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("${mins}m", color = MaterialTheme.colorScheme.onBackground)
-                                }
+                            }
+                        }
+
+                        // Show Save button if the current customized time is different from the saved preset value
+                        val isModified = (selectedPresetIndex in presets.indices) && (totalSeconds != presets[selectedPresetIndex])
+                        if (isModified && !isRunning) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = onSavePresetClick,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            ) {
+                                Text("💾 Save as Preset", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -356,10 +495,15 @@ fun FocusTimerContentPreview() {
         totalSeconds = 1500,
         isRunning = false,
         intention = "Reviewing Code",
+        presets = listOf(300, 1500, 3600),
+        selectedPresetIndex = 1,
         onStartClick = {},
         onStopClick = {},
         onResetClick = {},
-        onPresetClick = {},
+        onPresetSelect = {},
+        onAdjustTime = { _, _ -> },
+        onSavePresetClick = {},
         onIntentionChange = {}
     )
 }
+

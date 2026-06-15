@@ -1,6 +1,7 @@
 package com.indiana.focustimer
 
 import android.app.Application
+import android.content.Context
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +15,15 @@ class TimerViewModel @JvmOverloads constructor(
     application: Application,
     private val alarmController: FocusAlarmController = DefaultFocusAlarmController(application)
 ) : AndroidViewModel(application) {
+    
+    private val sharedPrefs = application.getSharedPreferences("focus_timer_prefs", Context.MODE_PRIVATE)
+
+    private val _presets = MutableStateFlow<List<Int>>(listOf(300, 1500, 3600))
+    val presets: StateFlow<List<Int>> = _presets
+
+    private val _selectedPresetIndex = MutableStateFlow(1)
+    val selectedPresetIndex: StateFlow<Int> = _selectedPresetIndex
+
     private val _remainingSeconds = MutableStateFlow(1500)
     val remainingSeconds: StateFlow<Int> = _remainingSeconds
 
@@ -27,11 +37,55 @@ class TimerViewModel @JvmOverloads constructor(
     val intention: StateFlow<String> = _intention
 
     private var timerJob: Job? = null
-    private val defaultFocusTime = 25 * 60
     private var endTimeRealtime: Long = 0L
 
     init {
-        resetTimer()
+        loadPresets()
+    }
+
+    private fun loadPresets() {
+        val p0 = sharedPrefs.getInt("preset_0", 300)      // 5 min
+        val p1 = sharedPrefs.getInt("preset_1", 1500)     // 25 min
+        val p2 = sharedPrefs.getInt("preset_2", 3600)     // 60 min
+        _presets.value = listOf(p0, p1, p2)
+
+        val activeIndex = sharedPrefs.getInt("active_preset_index", 1)
+        _selectedPresetIndex.value = activeIndex
+        
+        val duration = _presets.value[activeIndex]
+        _totalSeconds.value = duration
+        _remainingSeconds.value = duration
+    }
+
+    fun selectPreset(index: Int) {
+        if (index in 0..2) {
+            stopTimer()
+            _selectedPresetIndex.value = index
+            sharedPrefs.edit().putInt("active_preset_index", index).apply()
+            val duration = _presets.value[index]
+            _totalSeconds.value = duration
+            _remainingSeconds.value = duration
+        }
+    }
+
+    fun saveCurrentAsPreset() {
+        val activeIndex = _selectedPresetIndex.value
+        val currentDuration = _totalSeconds.value
+        if (activeIndex in 0..2) {
+            sharedPrefs.edit().putInt("preset_$activeIndex", currentDuration).apply()
+            val updatedPresets = _presets.value.toMutableList()
+            updatedPresets[activeIndex] = currentDuration
+            _presets.value = updatedPresets
+        }
+    }
+
+    fun setCustomTime(minutes: Int, seconds: Int) {
+        val newSeconds = minutes * 60 + seconds
+        if (newSeconds > 0) {
+            stopTimer()
+            _totalSeconds.value = newSeconds
+            _remainingSeconds.value = newSeconds
+        }
     }
 
     fun startTimer() {
@@ -73,20 +127,17 @@ class TimerViewModel @JvmOverloads constructor(
 
     fun resetTimer() {
         stopTimer()
-        _remainingSeconds.value = defaultFocusTime
-        _totalSeconds.value = defaultFocusTime
+        val duration = _presets.value[_selectedPresetIndex.value]
+        _totalSeconds.value = duration
+        _remainingSeconds.value = duration
     }
 
     fun setFocusTime(minutes: Int) {
-        val newSeconds = minutes * 60
-        if (newSeconds > 0) {
-            _totalSeconds.value = newSeconds
-            _remainingSeconds.value = newSeconds
-            stopTimer()
-        }
+        setCustomTime(minutes, 0)
     }
 
     fun setIntention(newIntention: String) {
         _intention.value = newIntention
     }
 }
+
