@@ -551,6 +551,12 @@ fun FocusTimerContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    val startButtonText = if (isPomodoroMode && currentStage != PomodoroStage.FOCUS) {
+                        stringResource(R.string.start_break_btn)
+                    } else {
+                        stringResource(R.string.start_focus_btn)
+                    }
+
                     Row(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
@@ -563,9 +569,10 @@ fun FocusTimerContent(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(
-                                    text = stringResource(R.string.start_focus_btn),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    fontWeight = FontWeight.Bold
+                                    text = startButtonText,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         } else {
@@ -576,13 +583,14 @@ fun FocusTimerContent(
                             ) {
                                 Text(
                                     text = stringResource(R.string.pause_btn),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         OutlinedButton(
                             onClick = onResetClick,
@@ -590,21 +598,23 @@ fun FocusTimerContent(
                         ) {
                             Text(
                                 text = stringResource(R.string.reset_btn),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
                         if (isPomodoroMode) {
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             OutlinedButton(
                                 onClick = onSkipClick,
                                 shape = RoundedCornerShape(24.dp)
                             ) {
                                 Text(
                                     text = stringResource(R.string.btn_skip),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.onBackground
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
