@@ -8,6 +8,7 @@
     <string name="focus_target_placeholder">e.g. Coding, Reading, Writing</string>
     <string name="focusing_indicator">FOCUSING</string>
     <string name="start_focus_btn">Start Focus</string>
+    <string name="start_break_btn">Start Break</string>
     <string name="pause_btn">Pause</string>
     <string name="reset_btn">Reset</string>
     <string name="mode_custom_timer">Timer</string>
