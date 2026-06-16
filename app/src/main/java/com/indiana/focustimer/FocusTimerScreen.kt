@@ -718,5 +718,4 @@ fun FocusTimerContentPreview() {
         onResetCycleClick = {}
     )
 }
-}
 
