@@ -10,4 +10,13 @@
     <string name="start_focus_btn">Start Focus</string>
     <string name="pause_btn">Pause</string>
     <string name="reset_btn">Reset</string>
+    <string name="mode_custom_timer">Timer</string>
+    <string name="mode_pomodoro">Pomodoro</string>
+    <string name="pomodoro_focus_title">Focus Session (%1$d of 4)</string>
+    <string name="pomodoro_short_break_title">Short Break</string>
+    <string name="pomodoro_long_break_title">Long Break</string>
+    <string name="pomodoro_break_prompt">Take a break. Stretch and hydrate!</string>
+    <string name="pomodoro_long_break_prompt">Unwind. You\'ve earned a longer break!</string>
+    <string name="btn_skip">Skip</string>
+    <string name="btn_reset_cycle">Reset Cycle</string>
 </resources>
