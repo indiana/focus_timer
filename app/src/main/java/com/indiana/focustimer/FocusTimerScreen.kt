@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -69,6 +70,9 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
     val intention = viewModel.intention.collectAsState().value
     val presets = viewModel.presets.collectAsState().value
     val selectedPresetIndex = viewModel.selectedPresetIndex.collectAsState().value
+    val isPomodoroMode = viewModel.isPomodoroMode.collectAsState().value
+    val currentStage = viewModel.currentStage.collectAsState().value
+    val completedFocusCount = viewModel.completedFocusCount.collectAsState().value
 
     // Keep Screen On logic
     val view = LocalView.current
@@ -91,13 +95,19 @@ fun FocusTimerScreen(viewModel: TimerViewModel) {
         intention = intention,
         presets = presets,
         selectedPresetIndex = selectedPresetIndex,
+        isPomodoroMode = isPomodoroMode,
+        currentStage = currentStage,
+        completedFocusCount = completedFocusCount,
         onStartClick = { viewModel.startTimer() },
         onStopClick = { viewModel.stopTimer() },
         onResetClick = { viewModel.resetTimer() },
         onPresetSelect = { index -> viewModel.selectPreset(index) },
         onAdjustTime = { mins, secs -> viewModel.setCustomTime(mins, secs) },
         onSavePresetClick = { viewModel.saveCurrentAsPreset() },
-        onIntentionChange = { text -> viewModel.setIntention(text) }
+        onIntentionChange = { text -> viewModel.setIntention(text) },
+        onModeToggle = { enabled -> viewModel.setPomodoroMode(enabled) },
+        onSkipClick = { viewModel.skipPomodoroStage() },
+        onResetCycleClick = { viewModel.resetPomodoroCycle() }
     )
 }
 
@@ -109,17 +119,43 @@ fun FocusTimerContent(
     intention: String,
     presets: List<Int>,
     selectedPresetIndex: Int,
+    isPomodoroMode: Boolean,
+    currentStage: PomodoroStage,
+    completedFocusCount: Int,
     onStartClick: () -> Unit,
     onStopClick: () -> Unit,
     onResetClick: () -> Unit,
     onPresetSelect: (Int) -> Unit,
     onAdjustTime: (Int, Int) -> Unit,
     onSavePresetClick: () -> Unit,
-    onIntentionChange: (String) -> Unit
+    onIntentionChange: (String) -> Unit,
+    onModeToggle: (Boolean) -> Unit,
+    onSkipClick: () -> Unit,
+    onResetCycleClick: () -> Unit
 ) {
     var showAdjustDialog by remember { mutableStateOf(false) }
 
-    MaterialTheme(colorScheme = PremiumDarkColorScheme) {
+    val themePrimaryColor = if (isPomodoroMode && (currentStage == PomodoroStage.SHORT_BREAK || currentStage == PomodoroStage.LONG_BREAK)) {
+        Color(0xFF2DD4BF) // Teal 400
+    } else {
+        Color(0xFF6366F1) // Indigo 500
+    }
+
+    val animatedPrimaryColor by animateColorAsState(
+        targetValue = themePrimaryColor,
+        label = "themePrimaryColor"
+    )
+
+    val dynamicColorScheme = PremiumDarkColorScheme.copy(
+        primary = animatedPrimaryColor,
+        primaryContainer = if (isPomodoroMode && (currentStage == PomodoroStage.SHORT_BREAK || currentStage == PomodoroStage.LONG_BREAK)) {
+            Color(0xFF0F766E) // Teal 700 / Dark teal container
+        } else {
+            Color(0xFF312E81) // Indigo 900
+        }
+    )
+
+    MaterialTheme(colorScheme = dynamicColorScheme) {
         if (showAdjustDialog) {
             var minutesInput by remember { mutableStateOf((totalSeconds / 60).toString()) }
             var secondsInput by remember { mutableStateOf((totalSeconds % 60).toString()) }
@@ -131,7 +167,7 @@ fun FocusTimerContent(
                 text = {
                     Column {
                         Text(
-                            text = "Set a custom duration for this focus session:",
+                            text = "Set a custom duration for this session:",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -177,7 +213,7 @@ fun FocusTimerContent(
                                 text = "Please enter valid numbers (Seconds: 0-59, Minutes: 0-180)",
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.labelSmall
-                            )
+                             )
                         }
                     }
                 },
@@ -212,7 +248,6 @@ fun FocusTimerContent(
             val minutes = remainingSeconds / 60
             val seconds = remainingSeconds % 60
 
-            // Calculate animated progress fraction
             val progressFraction = if (totalSeconds > 0) {
                 remainingSeconds.toFloat() / totalSeconds.toFloat()
             } else {
@@ -243,14 +278,120 @@ fun FocusTimerContent(
                     modifier = Modifier.padding(top = 16.dp)
                 )
 
-                // 2. Intention Setter
+                // 1.5 Mode Switcher (Timer / Pomodoro)
+                if (!isRunning) {
+                    TabRow(
+                        selectedTabIndex = if (isPomodoroMode) 1 else 0,
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .padding(vertical = 4.dp),
+                        containerColor = Color.Transparent,
+                        divider = {},
+                        indicator = {}
+                    ) {
+                        val selectedTabColor = MaterialTheme.colorScheme.primary
+                        val unselectedTabColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                        
+                        Tab(
+                            selected = !isPomodoroMode,
+                            onClick = { onModeToggle(false) },
+                            text = { 
+                                Text(
+                                    text = stringResource(R.string.mode_custom_timer), 
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ) 
+                            },
+                            selectedContentColor = selectedTabColor,
+                            unselectedContentColor = unselectedTabColor
+                        )
+                        Tab(
+                            selected = isPomodoroMode,
+                            onClick = { onModeToggle(true) },
+                            text = { 
+                                Text(
+                                    text = stringResource(R.string.mode_pomodoro), 
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ) 
+                            },
+                            selectedContentColor = selectedTabColor,
+                            unselectedContentColor = unselectedTabColor
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (isPomodoroMode) stringResource(R.string.mode_pomodoro).uppercase() else stringResource(R.string.mode_custom_timer).uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            letterSpacing = 1.5.sp
+                        ),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                // 2. Intention Setter / Break Prompts
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp)
+                        .padding(vertical = 12.dp)
                 ) {
-                    if (isRunning) {
+                    val showIntentionInput = !isPomodoroMode || currentStage == PomodoroStage.FOCUS
+                    
+                    if (showIntentionInput) {
+                        if (isRunning) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.current_task_header),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            letterSpacing = 1.sp,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = intention.ifBlank { stringResource(R.string.staying_focused_fallback) },
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedTextField(
+                                value = intention,
+                                onValueChange = onIntentionChange,
+                                label = { Text(stringResource(R.string.focus_target_label)) },
+                                placeholder = { Text(stringResource(R.string.focus_target_placeholder)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp)
+                            )
+                        }
+                    } else {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -265,15 +406,21 @@ fun FocusTimerContent(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = stringResource(R.string.current_task_header),
+                                    text = stringResource(
+                                        if (currentStage == PomodoroStage.SHORT_BREAK) R.string.pomodoro_short_break_title 
+                                        else R.string.pomodoro_long_break_title
+                                    ).uppercase(),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         letterSpacing = 1.sp,
-                                        color = MaterialTheme.colorScheme.secondary
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = intention.ifBlank { stringResource(R.string.staying_focused_fallback) },
+                                    text = stringResource(
+                                        if (currentStage == PomodoroStage.SHORT_BREAK) R.string.pomodoro_break_prompt 
+                                        else R.string.pomodoro_long_break_prompt
+                                    ),
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -282,24 +429,6 @@ fun FocusTimerContent(
                                 )
                             }
                         }
-                    } else {
-                        OutlinedTextField(
-                            value = intention,
-                            onValueChange = onIntentionChange,
-                            label = { Text(stringResource(R.string.focus_target_label)) },
-                            placeholder = { Text(stringResource(R.string.focus_target_placeholder)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
-                                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                                unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                        )
                     }
                 }
 
@@ -307,10 +436,9 @@ fun FocusTimerContent(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(260.dp)
-                        .padding(16.dp)
+                        .size(250.dp)
+                        .padding(8.dp)
                 ) {
-                    // Underlay Track Circle
                     CircularProgressIndicator(
                         progress = 1.0f,
                         modifier = Modifier.fillMaxSize(),
@@ -318,7 +446,6 @@ fun FocusTimerContent(
                         strokeWidth = 12.dp,
                         strokeCap = StrokeCap.Round
                     )
-                    // Active Progress Ring
                     CircularProgressIndicator(
                         progress = animatedProgress,
                         modifier = Modifier.fillMaxSize(),
@@ -327,7 +454,6 @@ fun FocusTimerContent(
                         strokeCap = StrokeCap.Round
                     )
 
-                    // Text & Info inside (Clickable to adjust time when idle)
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
@@ -337,18 +463,36 @@ fun FocusTimerContent(
                                 showAdjustDialog = true
                             }
                     ) {
+                        if (isPomodoroMode) {
+                            val stageText = when (currentStage) {
+                                PomodoroStage.FOCUS -> stringResource(R.string.pomodoro_focus_title, (completedFocusCount % 4) + 1)
+                                PomodoroStage.SHORT_BREAK -> stringResource(R.string.pomodoro_short_break_title)
+                                PomodoroStage.LONG_BREAK -> stringResource(R.string.pomodoro_long_break_title)
+                            }
+                            Text(
+                                text = stageText.uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    letterSpacing = 1.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+
                         Text(
                             text = "%02d:%02d".format(minutes, seconds),
                             style = MaterialTheme.typography.displayLarge.copy(
-                                fontSize = 56.sp,
+                                fontSize = 52.sp,
                                 fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                         )
                         if (isRunning) {
                             Spacer(modifier = Modifier.height(4.dp))
+                            val runningIndicator = if (isPomodoroMode && currentStage != PomodoroStage.FOCUS) "RESTING" else stringResource(R.string.focusing_indicator)
                             Text(
-                                text = stringResource(R.string.focusing_indicator),
+                                text = runningIndicator,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.primary,
                                     letterSpacing = 1.5.sp,
@@ -369,13 +513,47 @@ fun FocusTimerContent(
                     }
                 }
 
-                // 4. Control Buttons (Start / Pause, Reset)
+                // 3.5 Pomodoro Cycle Dots (Progress indicators)
+                if (isPomodoroMode) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        val activeFocusSessionIndex = completedFocusCount % 4
+                        for (i in 0 until 4) {
+                            val isCompleted = i < activeFocusSessionIndex
+                            val isActive = i == activeFocusSessionIndex && currentStage == PomodoroStage.FOCUS
+                            
+                            val dotColor = if (isCompleted) {
+                                MaterialTheme.colorScheme.primary
+                            } else if (isActive) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                            
+                            val dotWidth = if (isActive) 16.dp else 8.dp
+                            
+                            Surface(
+                                modifier = Modifier
+                                    .height(8.dp)
+                                    .width(dotWidth),
+                                shape = RoundedCornerShape(4.dp),
+                                color = dotColor
+                            ) {}
+                        }
+                    }
+                }
+
+                // 4. Control Buttons (Start / Pause, Reset, Skip, Reset Cycle)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (!isRunning) {
@@ -386,7 +564,7 @@ fun FocusTimerContent(
                             ) {
                                 Text(
                                     text = stringResource(R.string.start_focus_btn),
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -398,13 +576,13 @@ fun FocusTimerContent(
                             ) {
                                 Text(
                                     text = stringResource(R.string.pause_btn),
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         OutlinedButton(
                             onClick = onResetClick,
@@ -412,60 +590,88 @@ fun FocusTimerContent(
                         ) {
                             Text(
                                 text = stringResource(R.string.reset_btn),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                 color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+
+                        if (isPomodoroMode) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            OutlinedButton(
+                                onClick = onSkipClick,
+                                shape = RoundedCornerShape(24.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.btn_skip),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+                    }
+
+                    if (isPomodoroMode && !isRunning && completedFocusCount > 0) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = onResetCycleClick
+                        ) {
+                            Text(
+                                text = stringResource(R.string.btn_reset_cycle),
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // 5. Presets Row & Save Option
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    // 5. Presets Row & Save Option (Only shown in Custom Timer mode)
+                    if (!isPomodoroMode) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            presets.forEachIndexed { index, duration ->
-                                val isSelected = (index == selectedPresetIndex)
-                                val caption = formatPresetCaption(duration)
-                                if (isSelected) {
-                                    Button(
-                                        onClick = { onPresetSelect(index) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(caption, fontWeight = FontWeight.Bold)
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { onPresetSelect(index) },
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(caption, color = MaterialTheme.colorScheme.onBackground)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                presets.forEachIndexed { index, duration ->
+                                    val isSelected = (index == selectedPresetIndex)
+                                    val caption = formatPresetCaption(duration)
+                                    if (isSelected) {
+                                        Button(
+                                            onClick = { onPresetSelect(index) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(caption, fontWeight = FontWeight.Bold)
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = { onPresetSelect(index) },
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(caption, color = MaterialTheme.colorScheme.onBackground)
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        // Show Save button if the current customized time is different from the saved preset value
-                        val isModified = (selectedPresetIndex in presets.indices) && (totalSeconds != presets[selectedPresetIndex])
-                        if (isModified && !isRunning) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = onSavePresetClick,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            ) {
-                                Text("💾 Save as Preset", fontWeight = FontWeight.Bold)
+                            val isModified = (selectedPresetIndex in presets.indices) && (totalSeconds != presets[selectedPresetIndex])
+                            if (isModified && !isRunning) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = onSavePresetClick,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                ) {
+                                    Text("💾 Save as Preset", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -497,13 +703,20 @@ fun FocusTimerContentPreview() {
         intention = "Reviewing Code",
         presets = listOf(300, 1500, 3600),
         selectedPresetIndex = 1,
+        isPomodoroMode = true,
+        currentStage = PomodoroStage.FOCUS,
+        completedFocusCount = 1,
         onStartClick = {},
         onStopClick = {},
         onResetClick = {},
         onPresetSelect = {},
         onAdjustTime = { _, _ -> },
         onSavePresetClick = {},
-        onIntentionChange = {}
+        onIntentionChange = {},
+        onModeToggle = {},
+        onSkipClick = {},
+        onResetCycleClick = {}
     )
+}
 }
 
