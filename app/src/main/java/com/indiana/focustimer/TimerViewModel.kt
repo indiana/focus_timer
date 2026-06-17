@@ -17,6 +17,11 @@ enum class PomodoroStage {
     LONG_BREAK
 }
 
+enum class Screen {
+    TIMER,
+    SETTINGS
+}
+
 class TimerViewModel @JvmOverloads constructor(
     application: Application,
     private val alarmController: FocusAlarmController = DefaultFocusAlarmController(application)
@@ -49,8 +54,18 @@ class TimerViewModel @JvmOverloads constructor(
     private val _currentStage = MutableStateFlow(PomodoroStage.FOCUS)
     val currentStage: StateFlow<PomodoroStage> = _currentStage
 
-    private val _completedFocusCount = MutableStateFlow(0)
-    val completedFocusCount: StateFlow<Int> = _completedFocusCount
+    private val _pomodoroSequence = MutableStateFlow<List<PomodoroStage>>(
+        listOf(
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.LONG_BREAK
+        )
+    )
+    val pomodoroSequence: StateFlow<List<PomodoroStage>> = _pomodoroSequence
+
+    private val _currentStageIndex = MutableStateFlow(0)
+    val currentStageIndex: StateFlow<Int> = _currentStageIndex
 
     private val _pomodoroFocusDuration = MutableStateFlow(1500)
     val pomodoroFocusDuration: StateFlow<Int> = _pomodoroFocusDuration
@@ -60,6 +75,20 @@ class TimerViewModel @JvmOverloads constructor(
 
     private val _pomodoroLongBreakDuration = MutableStateFlow(900)
     val pomodoroLongBreakDuration: StateFlow<Int> = _pomodoroLongBreakDuration
+
+    // Sound & Vibration Settings
+    private val _alarmSoundUri = MutableStateFlow<String?>("")
+    val alarmSoundUri: StateFlow<String?> = _alarmSoundUri
+
+    private val _alarmSoundName = MutableStateFlow("Default Notification Sound")
+    val alarmSoundName: StateFlow<String> = _alarmSoundName
+
+    private val _vibrationEnabled = MutableStateFlow(true)
+    val vibrationEnabled: StateFlow<Boolean> = _vibrationEnabled
+
+    // Navigation Screen State
+    private val _currentScreen = MutableStateFlow(Screen.TIMER)
+    val currentScreen: StateFlow<Screen> = _currentScreen
 
     private var timerJob: Job? = null
     private var endTimeRealtime: Long = 0L
@@ -77,14 +106,26 @@ class TimerViewModel @JvmOverloads constructor(
         val activeIndex = sharedPrefs.getInt("active_preset_index", 1)
         _selectedPresetIndex.value = activeIndex
 
+        // Load Settings
+        _alarmSoundUri.value = sharedPrefs.getString("alarm_sound_uri", "")
+        _alarmSoundName.value = sharedPrefs.getString("alarm_sound_name", "Default Notification Sound") ?: "Default Notification Sound"
+        _vibrationEnabled.value = sharedPrefs.getBoolean("vibration_enabled", true)
+
         // Load Pomodoro states
         val isPomodoro = sharedPrefs.getBoolean("is_pomodoro_mode", false)
         _isPomodoroMode.value = isPomodoro
 
-        val stageName = sharedPrefs.getString("pomodoro_current_stage", PomodoroStage.FOCUS.name) ?: PomodoroStage.FOCUS.name
-        _currentStage.value = PomodoroStage.valueOf(stageName)
+        // Parse custom pomodoro sequence
+        val defaultSeq = "FOCUS,SHORT_BREAK,FOCUS,SHORT_BREAK,FOCUS,SHORT_BREAK,FOCUS,LONG_BREAK"
+        val seqString = sharedPrefs.getString("pomodoro_sequence", defaultSeq) ?: defaultSeq
+        val parsedList = seqString.split(",").mapNotNull {
+            try { PomodoroStage.valueOf(it) } catch (e: Exception) { null }
+        }
+        _pomodoroSequence.value = if (parsedList.isNotEmpty()) parsedList else defaultSeq.split(",").map { PomodoroStage.valueOf(it) }
 
-        _completedFocusCount.value = sharedPrefs.getInt("pomodoro_completed_count", 0)
+        val activeIdx = sharedPrefs.getInt("pomodoro_active_index", 0)
+        _currentStageIndex.value = if (activeIdx in _pomodoroSequence.value.indices) activeIdx else 0
+        _currentStage.value = _pomodoroSequence.value[_currentStageIndex.value]
 
         _pomodoroFocusDuration.value = sharedPrefs.getInt("pomodoro_focus_duration", 1500)
         _pomodoroShortBreakDuration.value = sharedPrefs.getInt("pomodoro_short_break_duration", 300)
@@ -147,6 +188,33 @@ class TimerViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setStageDuration(stage: PomodoroStage, minutes: Int) {
+        val seconds = minutes * 60
+        if (seconds > 0) {
+            when (stage) {
+                PomodoroStage.FOCUS -> {
+                    _pomodoroFocusDuration.value = seconds
+                    sharedPrefs.edit().putInt("pomodoro_focus_duration", seconds).apply()
+                }
+                PomodoroStage.SHORT_BREAK -> {
+                    _pomodoroShortBreakDuration.value = seconds
+                    sharedPrefs.edit().putInt("pomodoro_short_break_duration", seconds).apply()
+                }
+                PomodoroStage.LONG_BREAK -> {
+                    _pomodoroLongBreakDuration.value = seconds
+                    sharedPrefs.edit().putInt("pomodoro_long_break_duration", seconds).apply()
+                }
+            }
+            if (!_isRunning.value) {
+                val activeStage = _pomodoroSequence.value[_currentStageIndex.value]
+                if (activeStage == stage) {
+                    _totalSeconds.value = seconds
+                    _remainingSeconds.value = seconds
+                }
+            }
+        }
+    }
+
     fun setPomodoroMode(enabled: Boolean) {
         if (_isPomodoroMode.value == enabled) return
         stopTimer()
@@ -171,23 +239,13 @@ class TimerViewModel @JvmOverloads constructor(
     }
 
     fun transitionPomodoroStage() {
-        val nextStage = when (_currentStage.value) {
-            PomodoroStage.FOCUS -> {
-                val nextCount = _completedFocusCount.value + 1
-                _completedFocusCount.value = nextCount
-                sharedPrefs.edit().putInt("pomodoro_completed_count", nextCount).apply()
-                if (nextCount > 0 && nextCount % 4 == 0) {
-                    PomodoroStage.LONG_BREAK
-                } else {
-                    PomodoroStage.SHORT_BREAK
-                }
-            }
-            PomodoroStage.SHORT_BREAK, PomodoroStage.LONG_BREAK -> {
-                PomodoroStage.FOCUS
-            }
-        }
+        val seq = _pomodoroSequence.value
+        val nextIdx = (_currentStageIndex.value + 1) % seq.size
+        _currentStageIndex.value = nextIdx
+        sharedPrefs.edit().putInt("pomodoro_active_index", nextIdx).apply()
+        
+        val nextStage = seq[nextIdx]
         _currentStage.value = nextStage
-        sharedPrefs.edit().putString("pomodoro_current_stage", nextStage.name).apply()
         
         val duration = getDurationForStage(nextStage)
         _totalSeconds.value = duration
@@ -201,14 +259,13 @@ class TimerViewModel @JvmOverloads constructor(
 
     fun resetPomodoroCycle() {
         stopTimer()
-        _completedFocusCount.value = 0
-        _currentStage.value = PomodoroStage.FOCUS
-        sharedPrefs.edit()
-            .putInt("pomodoro_completed_count", 0)
-            .putString("pomodoro_current_stage", PomodoroStage.FOCUS.name)
-            .apply()
+        _currentStageIndex.value = 0
+        sharedPrefs.edit().putInt("pomodoro_active_index", 0).apply()
         
-        val duration = getDurationForStage(PomodoroStage.FOCUS)
+        val nextStage = _pomodoroSequence.value[0]
+        _currentStage.value = nextStage
+        
+        val duration = getDurationForStage(nextStage)
         _totalSeconds.value = duration
         _remainingSeconds.value = duration
     }
@@ -222,7 +279,6 @@ class TimerViewModel @JvmOverloads constructor(
         val remaining = _remainingSeconds.value
         endTimeRealtime = SystemClock.elapsedRealtime() + remaining * 1000L
 
-        // Set dynamic intention text for the alarm based on mode/stage
         val alarmLabel = if (_isPomodoroMode.value) {
             when (_currentStage.value) {
                 PomodoroStage.FOCUS -> "Focus: ${_intention.value.ifBlank { "Session" }}"
@@ -278,6 +334,80 @@ class TimerViewModel @JvmOverloads constructor(
 
     fun setIntention(newIntention: String) {
         _intention.value = newIntention
+    }
+
+    // Settings Configuration Methods
+    fun setAlarmSound(uri: String?, name: String) {
+        sharedPrefs.edit()
+            .putString("alarm_sound_uri", uri ?: "")
+            .putString("alarm_sound_name", name)
+            .apply()
+        _alarmSoundUri.value = uri
+        _alarmSoundName.value = name
+    }
+
+    fun setVibrationEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("vibration_enabled", enabled).apply()
+        _vibrationEnabled.value = enabled
+    }
+
+    fun navigateTo(screen: Screen) {
+        _currentScreen.value = screen
+    }
+
+    private fun saveSequence(seq: List<PomodoroStage>) {
+        _pomodoroSequence.value = seq
+        val seqString = seq.joinToString(",") { it.name }
+        sharedPrefs.edit().putString("pomodoro_sequence", seqString).apply()
+        
+        // Coerce index
+        if (_currentStageIndex.value >= seq.size) {
+            _currentStageIndex.value = 0
+            sharedPrefs.edit().putInt("pomodoro_active_index", 0).apply()
+        }
+        
+        if (!_isRunning.value) {
+            val activeStage = seq[_currentStageIndex.value]
+            _currentStage.value = activeStage
+            val duration = getDurationForStage(activeStage)
+            _totalSeconds.value = duration
+            _remainingSeconds.value = duration
+        }
+    }
+
+    fun addStageToSequence(stage: PomodoroStage) {
+        val seq = _pomodoroSequence.value.toMutableList()
+        seq.add(stage)
+        saveSequence(seq)
+    }
+
+    fun removeStageFromSequence(index: Int) {
+        val seq = _pomodoroSequence.value.toMutableList()
+        if (seq.size > 1 && index in seq.indices) {
+            seq.removeAt(index)
+            saveSequence(seq)
+        }
+    }
+
+    fun moveStageInSequence(index: Int, up: Boolean) {
+        val seq = _pomodoroSequence.value.toMutableList()
+        val targetIndex = if (up) index - 1 else index + 1
+        if (index in seq.indices && targetIndex in seq.indices) {
+            val temp = seq[index]
+            seq[index] = seq[targetIndex]
+            seq[targetIndex] = temp
+            saveSequence(seq)
+        }
+    }
+
+    fun resetSequenceToDefault() {
+        val defaultSeq = listOf(
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.SHORT_BREAK,
+            PomodoroStage.FOCUS, PomodoroStage.LONG_BREAK
+        )
+        saveSequence(defaultSeq)
     }
 }
 
