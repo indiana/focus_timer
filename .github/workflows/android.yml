@@ -25,10 +25,12 @@ jobs:
       run: ./gradlew assembleDebug
 
     - name: Decode Keystore
+      if: github.ref == 'refs/heads/master'
       run: |
         echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/release.jks
 
     - name: Build Release Bundle
+      if: github.ref == 'refs/heads/master'
       env:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -38,7 +40,7 @@ jobs:
       run: ./gradlew bundleRelease --stacktrace > gradle_build.log 2>&1 || { tail -n 100 gradle_build.log; exit 1; }
 
     - name: Push logs on failure
-      if: failure()
+      if: failure() && github.ref == 'refs/heads/master'
       run: |
         git config --global user.name "Github Actions"
         git config --global user.email "actions@github.com"
@@ -48,6 +50,7 @@ jobs:
         git push origin debug-logs --force
 
     - name: Upload Release Bundle
+      if: github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: app-release
